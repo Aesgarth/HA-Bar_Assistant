@@ -1,0 +1,11 @@
+sync_shopping_list:
+  name: Sync Shopping List
+  description: Pulls items from Bar Assistant shopping list, adds them to a Home Assistant To-Do list, and clears them from Bar Assistant.
+  fields:
+    target_todo_entity:
+      name: Target To-Do List
+      description: The Home Assistant To-Do entity ID to add items to (e.g., todo.shopping_list).
+      required: true
+      selector:
+        entity:
+          domain: todo
