@@ -1,0 +1,11 @@
+{
+  "domain": "bar_assistant",
+  "name": "Bar Assistant",
+  "codeowners": ["@Aesgarth"],
+  "config_flow": true,
+  "documentation": "https://github.com/Aesgarth/HA-Bar_Assistant",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/Aesgarth/HA-Bar_Assistant/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}
