@@ -65,7 +65,7 @@ To sync your items, you must call the service. You can do this via a Button on y
 #### Example Automation (YAML)
 This automation runs every morning at 8 AM, or you can trigger it manually.
 
-yaml
+```yaml
 alias: "Sync Bar Shopping List"
 description: "Moves items from Bar Assistant to HA Shopping List"
 trigger:
@@ -75,6 +75,7 @@ action:
   - service: bar_assistant.sync_shopping_list
     data:
       target_todo_entity: todo.shopping_list
+```
 
 ### 2. Dashboard Card (Cocktails)
 You can use the sensor attributes to list available drinks on your dashboard using a Markdown card.
@@ -82,7 +83,7 @@ You can use the sensor attributes to list available drinks on your dashboard usi
 Markdown Card Code:
 
 YAML
-
+```
 type: markdown
 content: >
   ## 🍸 Cocktail Menu
@@ -94,3 +95,4 @@ content: >
   {% for drink in state_attr('sensor.cocktails_i_can_make', 'cocktail_list') -%}
   - {{ drink }}
   {% endfor %}
+```
