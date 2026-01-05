@@ -16,6 +16,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     api = BarAssistantAPI(entry.data[CONF_API_URL], entry.data[CONF_API_TOKEN])
     hass.data[DOMAIN][entry.entry_id] = api
 
+
     # --- REGISTER SERVICES ---
     async def handle_sync_shopping_list(call: ServiceCall):
         """Service to pull from Bar Assistant and add to HA Todo."""
@@ -25,7 +26,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.error("No target_todo_entity provided.")
             return
 
-        # 1. Fetch Items
         items = await hass.async_add_executor_job(api.get_shopping_list)
         
         if not items:
@@ -33,24 +33,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             return
 
         for item in items:
-            ingredient_name = item.get('ingredient', {}).get('name', 'Unknown Item')
-            item_id = item.get('id')
+            # Docs say item contains "ingredient" object
+            ingredient = item.get('ingredient', {})
+            ingredient_name = ingredient.get('name', 'Unknown Item')
             
-            # 2. Add to Home Assistant Todo
-            # We call the native todo.add_item service
+            # The shopping list entry ID (needed to delete it later)
+            item_id = item.get('id') 
+            
+            quantity = item.get('quantity', 1)
+            display_name = f"{quantity}x {ingredient_name} (Bar)" if quantity > 1 else f"{ingredient_name} (Bar)"
+            
+            # Add to Home Assistant Todo
             await hass.services.async_call(
                 "todo",
                 "add_item",
-                {"entity_id": target_list, "item": f"{ingredient_name} (Bar Assistant)"},
+                {"entity_id": target_list, "item": display_name},
                 blocking=True
             )
 
-            # 3. Remove from Bar Assistant
-            await hass.async_add_executor_job(api.remove_item_from_list, item_id)
-            _LOGGER.info(f"Moved {ingredient_name} to HA and removed from Bar Assistant.")
+            # Remove from Bar Assistant
+            if item_id:
+                await hass.async_add_executor_job(api.remove_item_from_list, item_id)
+                _LOGGER.info(f"Moved {ingredient_name} to HA.")
 
     hass.services.async_register(DOMAIN, "sync_shopping_list", handle_sync_shopping_list)
-
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
