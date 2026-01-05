@@ -15,78 +15,76 @@ class BarAssistantAPI:
         self.user_id = None
 
     def _get_user_id(self):
-        """Fetch the User ID with heavy debugging."""
+        """Fetch the User ID securely from the profile endpoint."""
         if self.user_id:
             return self.user_id
             
         try:
-            url = f"{self.base_url}/api/users"
-            _LOGGER.info(f"Attempting to connect to: {url}")
-            
+            url = f"{self.base_url}/api/profile"
             response = requests.get(url, headers=self.headers, timeout=10)
             
-            # --- DEBUGGING BLOCK ---
-            content_type = response.headers.get('Content-Type', '')
-            raw_text = response.text
-            
-            _LOGGER.info(f"Response Status: {response.status_code}")
-            _LOGGER.info(f"Response Content-Type: {content_type}")
-            _LOGGER.info(f"Raw Response Start: {raw_text[:200]}") # Logs the first 200 chars
-            
             if response.status_code == 200:
-                if "<!DOCTYPE" in raw_text or "<html" in raw_text:
-                    _LOGGER.error("CRITICAL ERROR: The API URL is pointing to a website, not the API. Check your port!")
-                    return None
-                
-                try:
-                    data = response.json().get('data', [])
-                    if data:
-                        self.user_id = data[0]['id']
-                        _LOGGER.info(f"Success! Found User ID: {self.user_id}")
-                        return self.user_id
-                except Exception as json_err:
-                    _LOGGER.error(f"JSON Parsing failed: {json_err}")
+                data = response.json().get('data', {})
+                self.user_id = data.get('id')
+                return self.user_id
             else:
-                _LOGGER.error(f"Failed to get users. Status: {response.status_code}")
+                _LOGGER.error(f"Failed to authenticate. Status: {response.status_code}")
                 
         except Exception as e:
-            _LOGGER.error(f"Connection Error: {e}")
+            _LOGGER.error(f"Error connecting to Bar Assistant: {e}")
         return None
 
     def validate_auth(self):
+        """Test if the credentials are correct."""
         return self._get_user_id() is not None
 
     def get_shopping_list(self):
+        """Fetch the shopping list for the user."""
         uid = self._get_user_id()
-        if not uid: return []
+        if not uid:
+            return []
 
         try:
             url = f"{self.base_url}/api/users/{uid}/shopping-list"
             response = requests.get(url, headers=self.headers, timeout=10)
+            
             if response.status_code == 200:
                 return response.json().get('data', [])
+            else:
+                _LOGGER.error(f"Shopping List Error {response.status_code}")
+
         except Exception as e:
-            _LOGGER.error(f"Failed to fetch list: {e}")
+            _LOGGER.error(f"Failed to fetch shopping list: {e}")
         return []
 
     def remove_item_from_list(self, item_id):
+        """Remove an item from the shopping list."""
         uid = self._get_user_id()
-        if not uid: return
+        if not uid:
+            return
+
         try:
             url = f"{self.base_url}/api/users/{uid}/shopping-list/{item_id}"
             requests.delete(url, headers=self.headers, timeout=10)
-        except Exception:
-            pass
+        except Exception as e:
+            _LOGGER.error(f"Failed to delete item {item_id}: {e}")
 
     def get_cocktails(self):
+        """Fetch cocktails the user can make."""
         uid = self._get_user_id()
-        if not uid: return []
+        if not uid:
+            return []
+
         try:
             url = f"{self.base_url}/api/users/{uid}/cocktails"
             params = {"per_page": 50} 
             response = requests.get(url, headers=self.headers, params=params, timeout=10)
+            
             if response.status_code == 200:
                 return response.json().get('data', [])
+            else:
+                _LOGGER.error(f"Cocktail Fetch Error {response.status_code}")
+                
         except Exception as e:
             _LOGGER.error(f"Failed to fetch cocktails: {e}")
-            return []
+        return []
