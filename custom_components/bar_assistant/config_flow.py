@@ -1,7 +1,6 @@
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.core import callback
-from .const import DOMAIN, CONF_API_URL, CONF_API_TOKEN, DEFAULT_API_URL
+from .const import DOMAIN, CONF_API_URL, CONF_API_TOKEN, CONF_BAR_ID, DEFAULT_API_URL, DEFAULT_BAR_ID
 from .api import BarAssistantAPI
 
 class BarAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -12,8 +11,12 @@ class BarAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            # Validate the connection
-            api = BarAssistantAPI(user_input[CONF_API_URL], user_input[CONF_API_TOKEN])
+            # We pass the Bar ID to the API validator now
+            api = BarAssistantAPI(
+                user_input[CONF_API_URL], 
+                user_input[CONF_API_TOKEN],
+                user_input.get(CONF_BAR_ID, DEFAULT_BAR_ID)
+            )
             valid = await self.hass.async_add_executor_job(api.validate_auth)
 
             if valid:
@@ -26,6 +29,7 @@ class BarAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({
                 vol.Required(CONF_API_URL, default=DEFAULT_API_URL): str,
                 vol.Required(CONF_API_TOKEN): str,
+                vol.Required(CONF_BAR_ID, default=DEFAULT_BAR_ID): int, # <--- New Field
             }),
             errors=errors,
         )
