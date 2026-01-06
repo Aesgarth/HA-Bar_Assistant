@@ -29,6 +29,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Bar Assistant component."""
     hass.data.setdefault(DOMAIN, {})
     
+    # --- SAFETY CHECK: Prevent KeyError ---
+    if DOMAIN not in config:
+        _LOGGER.error("Bar Assistant: Configuration not found! Ensure 'bar_assistant:' is in configuration.yaml")
+        return False
+    
     bar_config = config[DOMAIN]
     base_url = bar_config[CONF_URL].rstrip("/")
     token = bar_config[CONF_TOKEN]
@@ -74,7 +79,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
                 for item in shopping_list:
                     # --- DEBUG: PRINT RAW DATA ---
-                    # This will show us the full structure so we can find the correct ID key
                     _LOGGER.error(f"RAW ITEM DUMP: {item}")
                     # -----------------------------
 
@@ -82,7 +86,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     ing_id = ingredient.get("id")
                     name = ingredient.get("name", "Unknown Item")
                     
-                    # Currently this is returning None, which is why we need the dump
+                    # We are debugging this line
                     list_id = item.get("id") 
 
                     _LOGGER.error(f"ITEM DATA: Name={name} | ListID={list_id} | IngID={ing_id}")
@@ -108,7 +112,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                         continue
 
                     # 4. Remove from Bar Assistant
-                    # We use the list_id to delete the specific row in the shopping list
                     delete_url = f"{base_url}/api/shopping-list/{list_id}"
                     
                     async with session.delete(delete_url, headers=headers) as del_resp:
