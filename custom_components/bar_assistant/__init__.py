@@ -1,42 +1,23 @@
 import logging
 import aiohttp
-import voluptuous as vol
-
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers.typing import ConfigType
-import homeassistant.helpers.config_validation as cv
+from homeassistant.config_entries import ConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "bar_assistant"
 
-CONF_URL = "url"
-CONF_TOKEN = "token"
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Default setup for the component. Required for HA."""
+    return True
 
-CONFIG_SCHEMA = vol.Schema(
-    {
-        DOMAIN: vol.Schema(
-            {
-                vol.Required(CONF_URL): cv.string,
-                vol.Required(CONF_TOKEN): cv.string,
-            }
-        )
-    },
-    extra=vol.ALLOW_EXTRA,
-)
-
-async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Bar Assistant component."""
-    hass.data.setdefault(DOMAIN, {})
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Bar Assistant from a config entry (UI Config)."""
     
-    # --- SAFETY CHECK: Prevent KeyError ---
-    if DOMAIN not in config:
-        _LOGGER.error("Bar Assistant: Configuration not found! Ensure 'bar_assistant:' is in configuration.yaml")
-        return False
-    
-    bar_config = config[DOMAIN]
-    base_url = bar_config[CONF_URL].rstrip("/")
-    token = bar_config[CONF_TOKEN]
+    # 1. Retrieve the config you entered in the UI
+    config_data = entry.data
+    base_url = config_data.get("url", "").rstrip("/")
+    token = config_data.get("token", "")
 
     async def async_handle_sync(call: ServiceCall):
         """Handle the sync service call."""
@@ -50,7 +31,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
         async with aiohttp.ClientSession() as session:
             try:
-                # 1. Get the User ID (Profile)
+                # 2. Get the User ID (Profile)
                 async with session.get(f"{base_url}/api/profile", headers=headers) as resp:
                     if resp.status != 200:
                         _LOGGER.error(f"Failed to get profile. Status: {resp.status}")
@@ -64,7 +45,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
                 _LOGGER.error(f"Syncing Single User ID: {user_id}")
 
-                # 2. Get the Shopping List
+                # 3. Get the Shopping List
                 async with session.get(f"{base_url}/api/shopping-list", headers=headers) as resp:
                     if resp.status != 200:
                         _LOGGER.error(f"Failed to get shopping list. Status: {resp.status}")
@@ -86,7 +67,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     ing_id = ingredient.get("id")
                     name = ingredient.get("name", "Unknown Item")
                     
-                    # We are debugging this line
+                    # We are still looking for the correct ID key
                     list_id = item.get("id") 
 
                     _LOGGER.error(f"ITEM DATA: Name={name} | ListID={list_id} | IngID={ing_id}")
@@ -99,7 +80,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                         _LOGGER.error(f"Skipping {name} - No Ingredient ID found.")
                         continue
 
-                    # 3. Add to Home Assistant Todo List
+                    # 4. Add to Home Assistant Todo List
                     try:
                         await hass.services.async_call(
                             "todo",
@@ -111,7 +92,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                         _LOGGER.error(f"Failed to add {name} to HA todo: {e}")
                         continue
 
-                    # 4. Remove from Bar Assistant
+                    # 5. Remove from Bar Assistant
                     delete_url = f"{base_url}/api/shopping-list/{list_id}"
                     
                     async with session.delete(delete_url, headers=headers) as del_resp:
@@ -126,5 +107,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             except Exception as e:
                 _LOGGER.error(f"General error during sync: {e}")
 
+    # Register the service
     hass.services.async_register(DOMAIN, "sync", async_handle_sync)
+    
+    return True
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
     return True
