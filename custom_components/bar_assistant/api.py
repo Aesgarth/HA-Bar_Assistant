@@ -67,6 +67,16 @@ class BarAssistantAPI:
         data = await self._request("GET", f"/api/users/{user_id}/shopping-list")
         return data.get("data", []) if data else []
 
+    async def async_add_to_list(self, user_id, ingredient_id):
+        """Add an item back to the shopping list."""
+        # Assuming standard POST payload for adding items
+        payload = {"ingredient_id": int(ingredient_id), "quantity": 1}
+        return await self._request(
+            "POST", 
+            f"/api/users/{user_id}/shopping-list", 
+            json=payload
+        )
+
     async def async_remove_from_list(self, user_id, ingredient_ids):
         """Batch delete items from the shopping list."""
         if not ingredient_ids:
@@ -81,12 +91,10 @@ class BarAssistantAPI:
 
     async def async_get_cocktails(self, user_id):
         """Get cocktails the user can make (Shelf)."""
-        # Endpoint based on your notes: /api/users/{id}/cocktails
         data = await self._request("GET", f"/api/users/{user_id}/cocktails")
         return data.get("data", []) if data else []
 
     async def async_get_total_cocktails(self):
         """Get total cocktails in the bar (Menu)."""
-        # Endpoint based on your notes: /api/bars/{id}/cocktails
         data = await self._request("GET", f"/api/bars/{self.bar_id}/cocktails")
         return data.get("data", []) if data else []
