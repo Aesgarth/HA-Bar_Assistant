@@ -1,98 +1,92 @@
-import requests
 import logging
+import aiohttp
+import async_timeout
 
 _LOGGER = logging.getLogger(__name__)
 
 class BarAssistantAPI:
     def __init__(self, base_url, token, bar_id=1):
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.token = token
         self.bar_id = bar_id
-        self.user_id = None
-
-    def _get_headers(self):
-        return {
+        self.headers = {
             "Authorization": f"Bearer {self.token}",
-            "Accept": "application/json",
             "Content-Type": "application/json",
-            "Bar-Assistant-Bar-Id": str(self.bar_id)
+            "Accept": "application/json",
+            "Bar-Assistant-Bar-Id": str(self.bar_id),
         }
 
-    def _ensure_user_id(self):
-        if self.user_id: return self.user_id
+    async def _request(self, method, endpoint, **kwargs):
+        """Internal method to handle requests."""
+        url = f"{self.base_url}{endpoint}"
         try:
-            url = f"{self.base_url}/api/profile"
-            response = requests.get(url, headers=self._get_headers(), timeout=10)
-            if response.status_code == 200:
-                data = response.json().get('data', {})
-                self.user_id = data.get('id')
-                return self.user_id
-        except Exception:
-            pass
-        return None
+            async with aiohttp.ClientSession() as session:
+                async with async_timeout.timeout(10):
+                    async with session.request(
+                        method, url, headers=self.headers, **kwargs
+                    ) as response:
+                        if response.status in (200, 201, 204):
+                            if method == "DELETE" or response.status == 204:
+                                return True
+                            return await response.json()
+                        else:
+                            _LOGGER.error(
+                                f"Error {response.status} connecting to {url}"
+                            )
+                            return None
+        except Exception as e:
+            _LOGGER.error(f"Connection error to {url}: {e}")
+            return None
 
     def validate_auth(self):
-        return self._ensure_user_id() is not None
+        """Synchronous validation for config flow."""
+        import requests
+        try:
+            resp = requests.get(f"{self.base_url}/api/profile", headers=self.headers, timeout=10)
+            return resp.status_code == 200
+        except Exception:
+            return False
 
     def get_users(self):
-        """Fetch all users (requires Admin/Super token)."""
+        """Synchronous user fetch for config flow."""
+        import requests
         try:
-            url = f"{self.base_url}/api/users"
-            response = requests.get(url, headers=self._get_headers(), timeout=10)
-            if response.status_code == 200:
-                return response.json().get('data', [])
-        except Exception as e:
-            _LOGGER.error(f"Failed to fetch users: {e}")
-        return []
-
-    def get_shopping_list(self, target_user_id=None):
-        """Fetch shopping list for specific user (or self if None)."""
-        uid = target_user_id if target_user_id else self._ensure_user_id()
-        if not uid: return []
-
-        try:
-            url = f"{self.base_url}/api/users/{uid}/shopping-list"
-            response = requests.get(url, headers=self._get_headers(), timeout=10)
-            if response.status_code == 200:
-                return response.json().get('data', [])
-        except Exception as e:
-            _LOGGER.error(f"Failed to fetch list for user {uid}: {e}")
-        return []
-
-    def remove_item_from_list(self, item_id, target_user_id=None):
-        """Remove item from specific user's list."""
-        uid = target_user_id if target_user_id else self._ensure_user_id()
-        if not uid: return
-
-        try:
-            url = f"{self.base_url}/api/users/{uid}/shopping-list/{item_id}"
-            requests.delete(url, headers=self._get_headers(), timeout=10)
-        except Exception as e:
-            _LOGGER.error(f"Failed to delete item {item_id}: {e}")
-
-    def get_cocktails(self):
-        """Fetch 'Cocktails I can make' (Shelf)."""
-        uid = self._ensure_user_id()
-        if not uid: return []
-        try:
-            url = f"{self.base_url}/api/users/{uid}/cocktails"
-            params = {"per_page": 300} 
-            response = requests.get(url, headers=self._get_headers(), params=params, timeout=10)
-            if response.status_code == 200:
-                return response.json().get('data', [])
+            resp = requests.get(f"{self.base_url}/api/users", headers=self.headers, timeout=10)
+            if resp.status_code == 200:
+                return resp.json().get("data", [])
+            return []
         except Exception:
-            pass
-        return []
+            return []
 
-    def get_total_cocktails(self):
-        """Fetch 'Total Cocktails' in the Bar Menu (Public)."""
-        try:
-            # Use the configured Bar ID to get the full menu
-            url = f"{self.base_url}/api/bars/{self.bar_id}/cocktails"
-            params = {"per_page": 300} 
-            response = requests.get(url, headers=self._get_headers(), params=params, timeout=10)
-            if response.status_code == 200:
-                return response.json().get('data', [])
-        except Exception:
-            pass
-        return []
+    async def async_get_profile(self):
+        """Get current user profile."""
+        return await self._request("GET", "/api/profile")
+
+    async def async_get_shopping_list(self, user_id):
+        """Fetch the shopping list for a specific user."""
+        data = await self._request("GET", f"/api/users/{user_id}/shopping-list")
+        return data.get("data", []) if data else []
+
+    async def async_remove_from_list(self, user_id, ingredient_ids):
+        """Batch delete items from the shopping list."""
+        if not ingredient_ids:
+            return True
+        
+        payload = {"ingredients": [{"id": i_id} for i_id in ingredient_ids]}
+        return await self._request(
+            "POST", 
+            f"/api/users/{user_id}/shopping-list/batch-delete", 
+            json=payload
+        )
+
+    async def async_get_cocktails(self, user_id):
+        """Get cocktails the user can make (Shelf)."""
+        # Endpoint based on your notes: /api/users/{id}/cocktails
+        data = await self._request("GET", f"/api/users/{user_id}/cocktails")
+        return data.get("data", []) if data else []
+
+    async def async_get_total_cocktails(self):
+        """Get total cocktails in the bar (Menu)."""
+        # Endpoint based on your notes: /api/bars/{id}/cocktails
+        data = await self._request("GET", f"/api/bars/{self.bar_id}/cocktails")
+        return data.get("data", []) if data else []
