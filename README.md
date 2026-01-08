@@ -5,16 +5,19 @@
 
 A custom integration to connect **Home Assistant** with **[Bar Assistant](https://bar-assistant.io)**.
 
-This integration allows you to sync your Bar Assistant shopping list directly into a Home Assistant To-Do list and view how many cocktails you can currently make based on your inventory.
+This integration brings your Bar Assistant shopping list directly into Home Assistant as a **native To-Do list** and provides sensors to track your inventory and menu capabilities.
 
 ## Features
 
-* **Shopping List Sync:** A dedicated service (`bar_assistant.sync_shopping_list`) that:
-    1.  Pulls items from your Bar Assistant shopping list.
-    2.  Adds them to a specific Home Assistant To-Do list (e.g., `todo.shopping_list`).
-    3.  **Automatically removes** the items from Bar Assistant to prevent duplication.
-* **Cocktail Sensor:** A sensor (`sensor.cocktails_i_can_make`) showing the count of drinks you can currently make.
-    * *Attributes:* Contains a list of the actual cocktail names, perfect for displaying on a dashboard.
+* **Interactive Shopping List (`todo.bar_assistant_shopping_list`):**
+    * **2-Way Sync:** Checking an item in Home Assistant immediately removes it from Bar Assistant (marking it as bought).
+    * **Aggregated View:** Combines shopping list items from multiple Bar Assistant users into a single, unified list.
+    * **Persistence:** "Checked" items stay visible in Home Assistant until you clear them, just like a standard shopping list.
+* **Smart Sensors:**
+    * `sensor.cocktails_i_can_make`: Counts how many recipes you can currently make with your shelf.
+    * `sensor.total_bar_menu`: Counts the total number of recipes in your database.
+    * `sensor.bar_shopping_list_items`: Counts the number of active items on the shopping list.
+* **Sync Service:** A service (`bar_assistant.sync_shopping_list`) is still available for advanced users who want to move items to a different list via automation.
 
 ---
 
@@ -22,14 +25,12 @@ This integration allows you to sync your Bar Assistant shopping list directly in
 
 ### Option 1: HACS (Recommended)
 
-Since this is a custom integration, you must add it as a custom repository in HACS first.
-
 1.  Open **HACS** in Home Assistant.
 2.  Click the **3 dots** in the top right corner and select **Custom repositories**.
 3.  Paste the URL: `https://github.com/Aesgarth/HA-Bar_Assistant`
 4.  Select **Integration** as the category.
 5.  Click **Add**.
-6.  Now search for "Bar Assistant" in HACS and click **Download**.
+6.  Search for "Bar Assistant" and click **Download**.
 7.  **Restart Home Assistant**.
 
 ### Option 2: Manual Installation
@@ -44,55 +45,65 @@ Since this is a custom integration, you must add it as a custom repository in HA
 
 1.  **Get your Credentials:**
     * **URL:** The URL to your Bar Assistant instance (e.g., `https://my-bar.com/bar` or `http://192.168.1.50:8000`).
-    * **API Token:** Log in to your Bar Assistant, go to **Settings / Profile**, and generate a Personal Access Token (or copy your existing Bearer token).
+    * **API Token:** Log in to your Bar Assistant, go to **Settings / Profile**, and generate a Personal Access Token.
 
 2.  **Add Integration:**
-    * In Home Assistant, go to **Settings > Devices & Services**.
+    * Go to **Settings > Devices & Services** in Home Assistant.
     * Click **+ Add Integration**.
     * Search for **Bar Assistant**.
-    * Enter your **API URL** and **API Token**.
+
+3.  **Setup Steps:**
+    * **Step 1:** Enter your API URL and Token.
+    * **Step 2:** Select which **Users** you want to sync. The integration will aggregate shopping list items from all selected users into one list.
 
 ---
 
 ## Usage
 
-### 1. Syncing the Shopping List
+### 1. The Shopping List
 
-To sync your items, you must call the service. You can do this via a Button on your dashboard or an Automation.
+Once installed, a new entity named `todo.bar_assistant_shopping_list` will appear.
+* **Add it to your Dashboard:** Use the standard **To-do List** card.
+* **How it works:**
+    * **View:** Shows ingredients added to the shopping list in Bar Assistant.
+    * **Complete:** Click the checkbox to mark an item as bought. It will be removed from Bar Assistant immediately.
+    * **Clear:** Use the "Clear Completed" button in Home Assistant to remove checked items from your view.
 
-**Service Name:** `bar_assistant.sync_shopping_list`
+### 2. Dashboard Card (Cocktail Menu)
 
-#### Example Automation (YAML)
-This automation runs every morning at 8 AM, or you can trigger it manually.
+You can use the sensor attributes to list available drinks on your dashboard.
+
+**Markdown Card Example:**
 
 ```yaml
-alias: "Sync Bar Shopping List"
-description: "Moves items from Bar Assistant to HA Shopping List"
+type: markdown
+content: >
+  ## 🍸 Bar Menu
+  
+  **Shelf:** {{ states('sensor.cocktails_i_can_make') }} drinks available
+  **Total Menu:** {{ states('sensor.total_bar_menu') }} recipes
+  
+  ---
+  ### 🍹 What can I make?
+  
+  {% for drink in state_attr('sensor.cocktails_i_can_make', 'cocktail_list') -%}
+  - {{ drink }}
+  {% endfor %}
+```
+### 3. Automation Service (Legacy)
+If you prefer to move items to a different list (like todo.groceries) instead of using the dedicated Bar Assistant list, you can use the sync service.
+
+Service: bar_assistant.sync_shopping_list
+
+```YAML
+
+alias: "Move Bar Items to Main Grocery List"
 trigger:
   - platform: time
     at: "08:00:00"
 action:
   - service: bar_assistant.sync_shopping_list
     data:
-      target_todo_entity: todo.shopping_list
+      target_todo_entity: todo.groceries
 ```
-
-### 2. Dashboard Card (Cocktails)
-You can use the sensor attributes to list available drinks on your dashboard using a Markdown card.
-
-Markdown Card Code:
-
-YAML
-```
-type: markdown
-content: >
-  ## 🍸 Cocktail Menu
-  
-  You can currently make **{{ states('sensor.cocktails_i_can_make') }}** drinks!
-  
-  ---
-  
-  {% for drink in state_attr('sensor.cocktails_i_can_make', 'cocktail_list') -%}
-  - {{ drink }}
-  {% endfor %}
-```
+Note: This service moves items and deletes them from Bar Assistant immediately.
